@@ -418,3 +418,45 @@ func TestFSM_BadRestore_OSS(t *testing.T) {
 	default:
 	}
 }
+
+func TestFSM_BadSnapshot_NilCAConfig(t *testing.T) {
+	t.Parallel()
+	// Create an FSM with no config entry.
+	fsm, err := New(nil, os.Stderr)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Snapshot
+	snap, err := fsm.Snapshot()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	defer snap.Release()
+	// Persist
+	buf := bytes.NewBuffer(nil)
+	sink := &MockSink{buf, false}
+	if err := snap.Persist(sink); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Try to restore on a new FSM
+	fsm2, err := New(nil, os.Stderr)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Do a restore
+	if err := fsm2.Restore(sink); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// Make sure there's no entry in the CA config table.
+	state := fsm2.State()
+	idx, config, err := state.CAConfig()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if idx != uint64(0) {
+		t.Fatalf("index should be zero: %v", idx)
+	}
+	if config != nil {
+		t.Fatalf("config should be nil")
+	}
+}
