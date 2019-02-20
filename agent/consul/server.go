@@ -115,6 +115,9 @@ type Server struct {
 	aclTokenReapLock    sync.RWMutex
 	aclTokenReapEnabled bool
 
+	aclIDPValidators    map[string]*idpValidatorEntry
+	aclIDPValidatorLock sync.RWMutex
+
 	// DEPRECATED (ACL-Legacy-Compat) - only needed while we support both
 	// useNewACLs is used to determine whether we can use new ACLs or not
 	useNewACLs int32
