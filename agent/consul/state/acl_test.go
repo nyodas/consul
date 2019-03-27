@@ -932,7 +932,6 @@ func TestStateStore_ACLToken_List(t *testing.T) {
 			policy: testPolicyID_A,
 			accessors: []string{
 				"47eea4da-bda1-48a6-901c-3e36d2d9262f",
-				"4915fc9d-3726-4171-b588-6c271f45eecd",
 			},
 		},
 		{
@@ -951,6 +950,7 @@ func TestStateStore_ACLToken_List(t *testing.T) {
 	}
 
 	for _, tc := range cases {
+		tc := tc // capture range variable
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			_, tokens, err := s.ACLTokenList(nil, tc.local, tc.global, tc.policy)
