@@ -422,7 +422,7 @@ func TestFSM_BadRestore_OSS(t *testing.T) {
 func TestFSM_BadSnapshot_NilCAConfig(t *testing.T) {
 	t.Parallel()
 	// Create an FSM with no config entry.
-	fsm, err := New(nil, os.Stderr)
+	fsm, err := New(nil, testWatchLimit, os.Stderr)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestFSM_BadSnapshot_NilCAConfig(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	// Try to restore on a new FSM
-	fsm2, err := New(nil, os.Stderr)
+	fsm2, err := New(nil, testWatchLimit, os.Stderr)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
