@@ -3290,6 +3290,7 @@ func TestFullConfig(t *testing.T) {
 				"circonus_submission_url": "gTcbS93G",
 				"disable_hostname": true,
 				"dogstatsd_addr": "0wSndumK",
+				"dogstatsd_buffer_length": 200,
 				"dogstatsd_tags": [ "3N81zSUB","Xtj8AnXZ" ],
 				"filter_default": true,
 				"prefix_filter": [ "+oJotS8XJ","-cazlEhGn" ],
@@ -3822,6 +3823,7 @@ func TestFullConfig(t *testing.T) {
 				disable_hostname = true
 				dogstatsd_addr = "0wSndumK"
 				dogstatsd_tags = [ "3N81zSUB","Xtj8AnXZ" ]
+				dogstatsd_buffer_length = 200
 				filter_default = true
 				prefix_filter = [ "+oJotS8XJ","-cazlEhGn" ]
 				metrics_prefix = "ftO6DySn"
@@ -4448,6 +4450,7 @@ func TestFullConfig(t *testing.T) {
 			CirconusSubmissionURL:              "gTcbS93G",
 			DisableHostname:                    true,
 			DogstatsdAddr:                      "0wSndumK",
+			DogstatsdBufferLength:              200,
 			DogstatsdTags:                      []string{"3N81zSUB", "Xtj8AnXZ"},
 			FilterDefault:                      true,
 			AllowedPrefixes:                    []string{"oJotS8XJ"},
@@ -5050,6 +5053,7 @@ func TestSanitize(t *testing.T) {
 			"CirconusSubmissionURL": "",
 			"DisableHostname": false,
 			"DogstatsdAddr": "",
+			"DogstatsdBufferLength": 0,
 			"DogstatsdTags": [],
 			"FilterDefault": false,
 			"MetricsPrefix": "",

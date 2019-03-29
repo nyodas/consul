@@ -570,6 +570,7 @@ type Telemetry struct {
 	CirconusSubmissionURL              *string  `json:"circonus_submission_url,omitempty" hcl:"circonus_submission_url" mapstructure:"circonus_submission_url"`
 	DisableHostname                    *bool    `json:"disable_hostname,omitempty" hcl:"disable_hostname" mapstructure:"disable_hostname"`
 	DogstatsdAddr                      *string  `json:"dogstatsd_addr,omitempty" hcl:"dogstatsd_addr" mapstructure:"dogstatsd_addr"`
+	DogstatsdBufferLength              *int     `json:"dogstatsd_buffer_length,omitempty" hcl:"dogstatsd_buffer_length" mapstructure:"dogstatsd_buffer_length"`
 	DogstatsdTags                      []string `json:"dogstatsd_tags,omitempty" hcl:"dogstatsd_tags" mapstructure:"dogstatsd_tags"`
 	FilterDefault                      *bool    `json:"filter_default,omitempty" hcl:"filter_default" mapstructure:"filter_default"`
 	PrefixFilter                       []string `json:"prefix_filter,omitempty" hcl:"prefix_filter" mapstructure:"prefix_filter"`

@@ -688,6 +688,7 @@ func (b *Builder) Build() (rt RuntimeConfig, err error) {
 			CirconusSubmissionURL:              b.stringVal(c.Telemetry.CirconusSubmissionURL),
 			DisableHostname:                    b.boolVal(c.Telemetry.DisableHostname),
 			DogstatsdAddr:                      b.stringVal(c.Telemetry.DogstatsdAddr),
+			DogstatsdBufferLength:              b.intVal(c.Telemetry.DogstatsdBufferLength),
 			DogstatsdTags:                      c.Telemetry.DogstatsdTags,
 			PrometheusRetentionTime:            b.durationVal("prometheus_retention_time", c.Telemetry.PrometheusRetentionTime),
 			FilterDefault:                      b.boolVal(c.Telemetry.FilterDefault),

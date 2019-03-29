@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/LeoCavaille/go-metrics/datadog"
 	metrics "github.com/armon/go-metrics"
 	"github.com/armon/go-metrics/circonus"
-	"github.com/armon/go-metrics/datadog"
 	"github.com/armon/go-metrics/prometheus"
 )
 
@@ -145,6 +145,14 @@ type TelemetryConfig struct {
 	// hcl: telemetry { dogstatsd_tags = []string }
 	DogstatsdTags []string `json:"dogstatsd_tags,omitempty" mapstructure:"dogstatsd_tags"`
 
+	// DogStatsdBufferLength is the length of the internal buffer in Dogstatsd that we
+	// allow before flushing metrics to the agent target. Metrics will be flushed when
+	// we reached that number of packets or 100ms whichever happens first.
+	// Default: 100
+	//
+	// hcl: telemetry { dogstatsd_buffer_length = int }
+	DogstatsdBufferLength int `json:"dogstatsd_buffer_length,omitempty" mapstructure:"dogstatsd_buffer_length"`
+
 	// PrometheusRetentionTime is the retention time for prometheus metrics if greater than 0.
 	// A value of 0 disable Prometheus support. Regarding Prometheus, it is considered a good
 	// practice to put large values here (such as a few days), and at least the interval between
@@ -254,12 +262,16 @@ func statsdSink(cfg TelemetryConfig, hostname string) (metrics.MetricSink, error
 	return metrics.NewStatsdSink(addr)
 }
 
-func dogstatdSink(cfg TelemetryConfig, hostname string) (metrics.MetricSink, error) {
+func dogstatsdSink(cfg TelemetryConfig, hostname string) (metrics.MetricSink, error) {
 	addr := cfg.DogstatsdAddr
 	if addr == "" {
 		return nil, nil
 	}
-	sink, err := datadog.NewDogStatsdSink(addr, hostname)
+	buflen := 100
+	if cfg.DogstatsdBufferLength > 0 {
+		buflen = cfg.DogstatsdBufferLength
+	}
+	sink, err := datadog.NewDogStatsdSink(addr, hostname, buflen)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +367,7 @@ func InitTelemetry(cfg TelemetryConfig) (*metrics.InmemSink, error) {
 	if err := addSink("statsd", statsdSink); err != nil {
 		return nil, err
 	}
-	if err := addSink("dogstatd", dogstatdSink); err != nil {
+	if err := addSink("dogstatsd", dogstatsdSink); err != nil {
 		return nil, err
 	}
 	if err := addSink("circonus", circonusSink); err != nil {
