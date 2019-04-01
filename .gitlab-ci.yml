@@ -1,0 +1,17 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  script:
+    - make test
+
+build:binary:
+  stage: build
+  only:
+    - tags
+  script:
+    - make linux
+    - ./pkg/bin/linux_amd64/consul version
