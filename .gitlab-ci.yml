@@ -42,7 +42,6 @@ release:
     - sed -i "s/VersionPrerelease = \".*\"/VersionPrerelease = \"$PRERELEASE\"/" version/version.go
     - make version
     - make linux
-    - docker run -it -v /go/src/github.com/hashicorp/consul/pkg/bin/linux_amd64:/artifacts -v /go/src/github.com/hashicorp/consul/fpm-recipe:/recipe -w /recipe dpirotte/fpm-cookery:trusty "fpm-cook"
     - cd pkg/bin/linux_amd64
     - zip consul_${CI_COMMIT_TAG}_linux_amd64.zip consul
     - aws s3 cp ./consul_${CI_COMMIT_TAG}_linux_amd64.zip s3://devops-public/consul/
