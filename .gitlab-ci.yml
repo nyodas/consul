@@ -14,7 +14,8 @@ ci-image:
   tags: [ "runner:docker", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   script:
-    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends zip awscli && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
+    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends zip awscli bundler ruby ruby-dev unzip && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
+    - echo 'RUN gem install fpm fpm-cookery --no-rdoc --no-ri' >> build-support/docker/Build-Go.dockerfile
     - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE - < build-support/docker/Build-Go.dockerfile
     - docker push 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
 
@@ -46,12 +47,6 @@ release:
     - cd pkg/bin/linux_amd64
     - zip consul_${CI_COMMIT_TAG}_linux_amd64.zip consul
     - aws s3 cp ./consul_${CI_COMMIT_TAG}_linux_amd64.zip s3://devops-public/consul/
-
-deb:
-  tags: [ "runner:docker", "size:large" ]
-  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
-  stage: deb
-  only:
-    - tags # needs to be the format v1.3.1-XXXX (-dd-2 for instance)
-  script:
-    - docker run -v /go/src/github.com/DataDog/consul/fpm-recipe:/recipe -w /recipe dpirotte/fpm-cookery:trusty fpm-cook
+    - popd
+    - cd fpm-recipe
+    - fpm-cook

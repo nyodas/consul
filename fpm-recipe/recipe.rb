@@ -8,7 +8,7 @@ class Consul < FPM::Cookery::Recipe
   homepage 'https://www.consul.io'
   # source "https://releases.hashicorp.com/consul/#{version}/consul_#{version}_linux_amd64.zip"
   # sha256 '87c9bce5128654e8f785a324ad88912101acda4c7915c73e74fdbd875d8e7806'
-  source "file:///artifacts/consul"
+  source "file:///go/src/github.com/hashicorp/consul/pkg/bin/linux_amd64/consul"
 
   maintainer 'Datadog <package@datadoghq.com>'
   vendor 'datadog'
