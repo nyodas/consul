@@ -4,6 +4,8 @@ import (
 	"math"
 	"sync/atomic"
 	"time"
+
+	dbglog "github.com/Sirupsen/logrus"
 )
 
 // suspicion manages the suspect timer for a node and provides an interface
@@ -64,6 +66,17 @@ func newSuspicion(from string, k int, min time.Duration, max time.Duration, fn f
 		fn(int(atomic.LoadInt32(&s.n)))
 	}
 
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":                 "newSuspicion",
+			"direction":           "none",
+			"from":                from,
+			"seenconfirmations":   s.n,
+			"neededconfirmations": k,
+			"mindur":              min,
+			"maxdur":              max,
+		}).Info("newSuspicion()")
+
 	// If there aren't any confirmations to be made then take the min
 	// time from the start.
 	timeout := max
@@ -101,6 +114,16 @@ func remainingSuspicionTime(n, k int32, elapsed time.Duration, min, max time.Dur
 // if it was a duplicate confirmation, or if we've got enough confirmations to
 // hit the minimum.
 func (s *suspicion) Confirm(from string) bool {
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":                 "Confirm",
+			"direction":           "send",
+			"from":                from,
+			"seenconfirmations":   s.n,
+			"neededconfirmations": s.k,
+		}).Info("Confirm()")
+
 	// If we've got enough confirmations then stop accepting them.
 	if atomic.LoadInt32(&s.n) >= s.k {
 		return false

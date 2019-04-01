@@ -9,7 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/armon/go-metrics"
+	dbglog "github.com/Sirupsen/logrus"
+	metrics "github.com/armon/go-metrics"
 )
 
 type nodeStateType int
@@ -19,6 +20,19 @@ const (
 	stateSuspect
 	stateDead
 )
+
+func nodeStateToString(s nodeStateType) string {
+	switch s {
+	case stateAlive:
+		return "stateAlive"
+	case stateSuspect:
+		return "stateSuspect"
+	case stateDead:
+		return "stateDead"
+	default:
+		return "unknown"
+	}
+}
 
 // Node represents a node in the cluster.
 type Node struct {
@@ -112,6 +126,11 @@ func (m *Memberlist) schedule() {
 		m.tickers = append(m.tickers, t)
 	}
 
+	// broadcast queue stats timer
+	z := time.NewTicker(60 * time.Second)
+	go m.triggerFunc(60*time.Second, z.C, stopCh, m.queueStats)
+	m.tickers = append(m.tickers, z)
+
 	// If we made any tickers, then record the stopTick channel for
 	// later.
 	if len(m.tickers) > 0 {
@@ -119,9 +138,41 @@ func (m *Memberlist) schedule() {
 	}
 }
 
+func (m *Memberlist) queueStats() {
+	m.broadcasts.Lock()
+	defer m.broadcasts.Unlock()
+
+	q := m.broadcasts
+	transmitLimit := retransmitLimit(q.RetransmitMult, q.NumNodes())
+	stats := make(map[string]int)
+	sum := 0
+	todo := 0
+
+	for i := len(q.bcQueue) - 1; i >= 0; i-- {
+		b := q.bcQueue[i]
+		msg := b.b.Message()
+		stats[msgTypeToString(messageType(msg[0]))]++
+		sum += b.transmits
+		todo += transmitLimit - b.transmits
+	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":          "queueStats",
+			"direction":    "none",
+			"stats":        stats,
+			"transmited":   sum,
+			"todotransmit": todo,
+			"translimits":  transmitLimit,
+			"qlen":         len(q.bcQueue),
+		}).Info("queueStats()")
+
+}
+
 // triggerFunc is used to trigger a function call each time a
 // message is received until a stop tick arrives.
 func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop <-chan struct{}, f func()) {
+
 	// Use a random stagger to avoid syncronizing
 	randStagger := time.Duration(uint64(rand.Int63()) % uint64(stagger))
 	select {
@@ -417,6 +468,14 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
 	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":             "probeNode-suspecthasfailed",
+			"direction":       "rcv",
+			"nodeName":        node.Name,
+			"nodeState":       nodeStateToString(node.State),
+			"nodeStateChange": node.StateChange,
+		}).Info("probeNode()")
 }
 
 // Ping initiates a ping to the node with the specified name.
@@ -506,11 +565,13 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
+	nmsg := 0
 	for _, node := range kNodes {
 		// Get any pending broadcasts
 		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
+		nmsg += len(msgs)
 		if len(msgs) == 0 {
-			return
+			break
 		}
 
 		addr := node.Address()
@@ -526,6 +587,17 @@ func (m *Memberlist) gossip() {
 				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		}
+	}
+
+	if nmsg > 0 {
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":         "gossip",
+				"direction":   "send",
+				"nSentMsgs":   nmsg,
+				"queuesize":   m.broadcasts.NumQueued(),
+				"healthScore": m.GetHealthScore(),
+			}).Info("gossip()")
 	}
 }
 
@@ -552,17 +624,33 @@ func (m *Memberlist) pushPull() {
 	if err := m.pushPullNode(node.Address(), false); err != nil {
 		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
 	}
+
 }
 
 // pushPullNode does a complete state exchange with a specific node.
 func (m *Memberlist) pushPullNode(addr string, join bool) error {
 	defer metrics.MeasureSince([]string{"memberlist", "pushPullNode"}, time.Now())
 
+	start := time.Now()
+
 	// Attempt to send and receive with the node
 	remote, userState, err := m.sendAndReceiveState(addr, join)
 	if err != nil {
 		return err
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":             "pushPullNode",
+			"direction":       "send",
+			"nodeAddr":        addr,
+			"join":            join,
+			"duration":        time.Since(start).Seconds(),
+			"userStateSize":   len(userState),
+			"remoteStateSize": len(remote),
+			"queuesize":       m.broadcasts.NumQueued(),
+			"healthScore":     m.GetHealthScore(),
+		}).Info("pushPullNode()")
 
 	if err := m.mergeRemoteState(join, remote, userState); err != nil {
 		return err
@@ -824,6 +912,14 @@ func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 		},
 	}
 	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":         "refute",
+			"direction":   "send",
+			"incarnation": inc,
+			"nodeName":    me.Name,
+			"nodeState":   nodeStateToString(me.State),
+		}).Info("refute()")
 }
 
 // aliveNode is invoked by the network layer when we get a message about a
@@ -1009,6 +1105,22 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		return
 	}
 
+	ti, seen := m.nodeTimers[s.Node]
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":           "suspectNode-enter",
+			"direction":     "send",
+			"node":          s.Node,
+			"from":          s.From,
+			"timer":         ti,
+			"nodeState":     nodeStateToString(state.State),
+			"seenbefore":    seen,
+			"incarnation":   s.Incarnation,
+			"stateIncarn":   state.Incarnation,
+			"nodeTimersLen": len(m.nodeTimers),
+		}).Info("suspectNode()")
+
 	// Ignore old incarnation numbers
 	if s.Incarnation < state.Incarnation {
 		return
@@ -1142,9 +1254,11 @@ func (m *Memberlist) deadNode(d *dead) {
 // mergeState is invoked by the network layer when we get a Push/Pull
 // state transfer
 func (m *Memberlist) mergeState(remote []pushNodeState) {
+	var alives, deads, suspects int
 	for _, r := range remote {
 		switch r.State {
 		case stateAlive:
+			alives++
 			a := alive{
 				Incarnation: r.Incarnation,
 				Node:        r.Name,
@@ -1156,12 +1270,23 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			m.aliveNode(&a, nil, false)
 
 		case stateDead:
+			deads++
 			// If the remote node believes a node is dead, we prefer to
 			// suspect that node instead of declaring it dead instantly
 			fallthrough
 		case stateSuspect:
+			suspects++
 			s := suspect{Incarnation: r.Incarnation, Node: r.Name, From: m.config.Name}
 			m.suspectNode(&s)
 		}
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "mergeState",
+			"direction": "rcv",
+			"alives":    alives,
+			"deads":     deads,
+			"suspects":  suspects,
+		}).Info("mergeState()")
 }
