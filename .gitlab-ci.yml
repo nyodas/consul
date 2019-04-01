@@ -24,6 +24,7 @@ test:
   script:
     - cp -a /go/src/github.com/DataDog/consul /go/src/github.com/hashicorp/consul
     - cd /go/src/github.com/hashicorp/consul
+    - ls -alR .
     - make test-ci
 
 build:binary:
