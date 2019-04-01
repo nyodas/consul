@@ -1,18 +1,32 @@
+variables:
+  CURRENT_CI_IMAGE: 1
+
 stages:
+  - ci-image
   - test
   - build
   - deploy
 
-test:
+ci-image:
+  stage: ci-image
+  when: manual
+  except: [ tags, schedules ]
   tags: [ "runner:docker", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
+  script:
+    - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE build-support/docker/Build-Go.dockerfile
+    - docker push 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
+
+test:
+  tags: [ "runner:main", "size:large" ]
+  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: test
   script:
     - make test
 
 build:binary:
-  tags: [ "runner:docker", "size:large" ]
-  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
+  tags: [ "runner:main", "size:large" ]
+  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: build
   only:
     - tags
