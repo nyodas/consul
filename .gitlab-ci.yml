@@ -14,7 +14,7 @@ ci-image:
   tags: [ "runner:docker", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   script:
-    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends xz-utils zip gnupg1 gpgv1 awscli bundler ruby ruby-dev unzip && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
+    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends bzip2 xz-utils zip gnupg1 gpgv1 awscli bundler ruby ruby-dev unzip && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
     - echo 'RUN gem install fpm fpm-cookery --no-rdoc --no-ri' >> build-support/docker/Build-Go.dockerfile
     - echo 'RUN wget https://bintray.com/artifact/download/smira/aptly/aptly_1.3.0_linux_amd64.tar.gz && tar zxf aptly_1.3.0_linux_amd64.tar.gz && mv aptly_1.3.0_linux_amd64/aptly /usr/bin/aptly' >> build-support/docker/Build-Go.dockerfile
     - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE - < build-support/docker/Build-Go.dockerfile
