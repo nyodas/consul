@@ -4,11 +4,15 @@ stages:
   - deploy
 
 test:
+  tags: [ "runner:docker", "size:large" ]
+  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   stage: test
   script:
     - make test
 
 build:binary:
+  tags: [ "runner:docker", "size:large" ]
+  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   stage: build
   only:
     - tags
