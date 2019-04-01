@@ -22,7 +22,8 @@ test:
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: test
   script:
-    - cp -a /go/src/github.com/DataDog/consul/{.,}* /go/src/github.com/hashicorp/consul/
+    - cp -a /go/src/github.com/DataDog/consul/.* /go/src/github.com/hashicorp/consul/
+    - cp -a /go/src/github.com/DataDog/consul/* /go/src/github.com/hashicorp/consul/
     - cd /go/src/github.com/hashicorp/consul
     - make test-ci
 
@@ -33,7 +34,8 @@ release:
   #  only:
   #    - tags
   script:
-    - cp -a /go/src/github.com/DataDog/consul/{.,}* /go/src/github.com/hashicorp/consul/
+    - cp -a /go/src/github.com/DataDog/consul/.* /go/src/github.com/hashicorp/consul/
+    - cp -a /go/src/github.com/DataDog/consul/* /go/src/github.com/hashicorp/consul/
     - cd $GOPATH/src/github.com/hashicorp/consul
     - make linux
     - ./pkg/bin/linux_amd64/consul version
