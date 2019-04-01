@@ -31,11 +31,13 @@ release:
   tags: [ "runner:main", "size:2xlarge" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: build
-  #  only:
-  #    - tags
+  only:
+    - tags # needs to be the format v1.3.1-XXXX (-dd-2 for instance)
   script:
     - rm -rf /go/src/github.com/hashicorp/consul
     - cp -a /go/src/github.com/DataDog/consul /go/src/github.com/hashicorp/consul
     - cd /go/src/github.com/hashicorp/consul
+    - export PRERELEASE=$(echo $CI_COMMIT_TAG | cut -d '-' -f2-)
+    - sed -i "s/VersionPrerelease = \".*\"/VersionPrerelease = \"$PRERELEASE\"/" version/version.go
     - make linux
     - ./pkg/bin/linux_amd64/consul version
