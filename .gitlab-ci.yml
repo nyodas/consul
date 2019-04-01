@@ -14,7 +14,7 @@ ci-image:
   tags: [ "runner:docker", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   script:
-    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends zip gnupg1 gpgv1 awscli bundler ruby ruby-dev unzip && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
+    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends xz zip gnupg1 gpgv1 awscli bundler ruby ruby-dev unzip && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
     - echo 'RUN gem install fpm fpm-cookery --no-rdoc --no-ri' >> build-support/docker/Build-Go.dockerfile
     - echo 'RUN wget https://bintray.com/artifact/download/smira/aptly/aptly_1.3.0_linux_amd64.tar.gz && tar zxf aptly_1.3.0_linux_amd64.tar.gz && mv aptly_1.3.0_linux_amd64/aptly /usr/bin/aptly' >> build-support/docker/Build-Go.dockerfile
     - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE - < build-support/docker/Build-Go.dockerfile
@@ -51,10 +51,9 @@ release:
     - cd /go/src/github.com/hashicorp/consul/fpm-recipe
     - fpm-cook
     - aws s3 cp ./pkg/consul_${CI_COMMIT_TAG}-1_amd64.deb s3://devops-public/consul/
-    - cp aptly.conf /etc/aptly.conf
     - aws s3 sync s3://chow.datadoghq.com-test/ chow_repo
-    - aptly repo create --distribution="bionic" bionic
-    - aptly repo -remove-files=false add bionic chow_repo
-    - aptly repo -remove-files=false add bionic ./pkg/consul_${CI_COMMIT_TAG}-1_amd64.deb
-    - "aptly publish repo bionic s3:test:"
-    - "aptly publish update bionic s3:test:"
+    - aptly -config=aptly.conf repo create --distribution="bionic" bionic
+    - aptly -config=aptly.conf repo -remove-files=false add bionic chow_repo
+    - aptly -config=aptly.conf repo -remove-files=false add bionic ./pkg/consul_${CI_COMMIT_TAG}-1_amd64.deb
+    - "aptly -config=aptly.conf  publish repo bionic s3:test:"
+    - "aptly -config=aptly.conf publish update bionic s3:test:"
