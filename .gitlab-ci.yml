@@ -22,14 +22,18 @@ test:
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: test
   script:
-    - make test
+    - cp -a $GOPATH/src/github.com/DataDog/consul $GOPATH/src/github.com/hashicorp/consul
+    - cd $GOPATH/src/github.com/hashicorp/consul
+    - make test-ci
 
 build:binary:
   tags: [ "runner:main", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
   stage: build
-  only:
-    - tags
+  #  only:
+  #    - tags
   script:
+    - cp -a $GOPATH/src/github.com/DataDog/consul $GOPATH/src/github.com/hashicorp/consul
+    - cd $GOPATH/src/github.com/hashicorp/consul
     - make linux
     - ./pkg/bin/linux_amd64/consul version
