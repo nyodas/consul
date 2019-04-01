@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	dbglog "github.com/Sirupsen/logrus"
 	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/go-msgpack/codec"
 )
@@ -58,6 +59,42 @@ const (
 	hasCrcMsg
 	errMsg
 )
+
+func msgTypeToString(m messageType) string {
+	switch m {
+
+	case pingMsg:
+		return "pingMsg"
+	case indirectPingMsg:
+		return "indirectPingMsg"
+	case ackRespMsg:
+		return "ackRespMsg"
+	case suspectMsg:
+		return "suspectMsg"
+	case aliveMsg:
+		return "aliveMsg"
+	case deadMsg:
+		return "deadMsg"
+	case pushPullMsg:
+		return "deadMsg"
+	case compoundMsg:
+		return "compoundMsg"
+	case userMsg:
+		return "userMsg"
+	case compressMsg:
+		return "compressMsg"
+	case encryptMsg:
+		return "encryptMsg"
+	case nackRespMsg:
+		return "nackRespMsg"
+	case hasCrcMsg:
+		return "hasCrcMsg"
+	case errMsg:
+		return "errMsg"
+	}
+
+	return "unknown"
+}
 
 // compressionType is used to specify the compression algorithm
 type compressionType uint8
@@ -214,6 +251,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
 	msgType, bufConn, dec, err := m.readStream(conn)
+
 	if err != nil {
 		if err != io.EOF {
 			m.logger.Printf("[ERR] memberlist: failed to receive: %s %s", err, LogConn(conn))
@@ -346,6 +384,18 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 	msgType := messageType(buf[0])
 	buf = buf[1:]
 
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "handleCommand",
+			"direction": "rcv",
+			"bufSize":   len(buf),
+			"from":      from,
+			"msgType":   msgTypeToString(msgType),
+			"lprioqlen": m.lowPriorityMsgQueue.Len(),
+			"hprioqlen": m.highPriorityMsgQueue.Len(),
+			"maxlen":    m.config.HandoffQueueDepth,
+		}).Info("handleCommand()")
+
 	// Switch on the msgType
 	switch msgType {
 	case compoundMsg:
@@ -427,6 +477,18 @@ func (m *Memberlist) packetHandler() {
 				msgType := msg.msgType
 				buf := msg.buf
 				from := msg.from
+
+				dbglog.WithFields(
+					dbglog.Fields{
+						"src":       "packetHandler",
+						"direction": "rcv",
+						"bufSize":   len(buf),
+						"from":      from,
+						"msgType":   msgTypeToString(msgType),
+						"lprioqlen": m.lowPriorityMsgQueue.Len(),
+						"hprioqlen": m.highPriorityMsgQueue.Len(),
+						"maxlen":    m.config.HandoffQueueDepth,
+					}).Info("packetHandler()")
 
 				switch msgType {
 				case suspectMsg:
@@ -620,6 +682,19 @@ func (m *Memberlist) encodeAndSendMsg(addr string, msgType messageType, msg inte
 	if err != nil {
 		return err
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "handleCommand",
+			"direction": "send",
+			"bufSize":   out.Len(),
+			"to":        addr,
+			"msgType":   msgTypeToString(msgType),
+			"lprioqlen": m.lowPriorityMsgQueue.Len(),
+			"hprioqlen": m.highPriorityMsgQueue.Len(),
+			"maxlen":    m.config.HandoffQueueDepth,
+		}).Info("handleCommand()")
+
 	if err := m.sendMsg(addr, out.Bytes()); err != nil {
 		return err
 	}
@@ -706,6 +781,17 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 		}
 		msg = buf.Bytes()
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "rawSendMsgPacket", // was rawSendMsgStream
+			"direction": "send",
+			"bufSize":   len(msg),
+			"to":        addr,
+			"lprioqlen": m.lowPriorityMsgQueue.Len(),
+			"hprioqlen": m.highPriorityMsgQueue.Len(),
+			"maxlen":    m.config.HandoffQueueDepth,
+		}).Info("rawSendMsgPacket()") // was handleCommand
 
 	metrics.IncrCounter([]string{"memberlist", "udp", "sent"}, float32(len(msg)))
 	_, err := m.transport.WriteTo(msg, addr)
@@ -870,6 +956,17 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 			return err
 		}
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "sendLocalState",
+			"direction": "send",
+			"bufSize":   bufConn.Len(),
+			"to":        conn.RemoteAddr(),
+			"lprioqlen": m.lowPriorityMsgQueue.Len(),
+			"hprioqlen": m.highPriorityMsgQueue.Len(),
+			"maxlen":    m.config.HandoffQueueDepth,
+		}).Info("sendLocalState()")
 
 	// Get the send buffer
 	return m.rawSendMsgStream(conn, bufConn.Bytes())
@@ -1037,9 +1134,24 @@ func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (boo
 
 // mergeRemoteState is used to merge the remote state with our local state
 func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, userBuf []byte) error {
+	// XXX dbglog: verifyProtocol() looks O(n).
+	// We're the sole consumer, so let's monitor it from here
+	start := time.Now()
 	if err := m.verifyProtocol(remoteNodes); err != nil {
 		return err
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":                    "mergeRemoteState",
+			"direction":              "send",
+			"join":                   join,
+			"verifyProtocolDuration": time.Since(start).Seconds(),
+			"userBufSize":            len(userBuf),
+			"numRemoteNodes":         len(remoteNodes),
+			"broadcastQueueSize":     m.broadcasts.NumQueued(),
+			"healthScore":            m.GetHealthScore(),
+		}).Info("mergeRemoteState()")
 
 	// Invoke the merge delegate if any
 	if join && m.config.Merge != nil {

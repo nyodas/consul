@@ -9,7 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/armon/go-metrics"
+	dbglog "github.com/Sirupsen/logrus"
+	metrics "github.com/armon/go-metrics"
 )
 
 type nodeStateType int
@@ -19,6 +20,19 @@ const (
 	stateSuspect
 	stateDead
 )
+
+func nodeStateToString(s nodeStateType) string {
+	switch s {
+	case stateAlive:
+		return "stateAlive"
+	case stateSuspect:
+		return "stateSuspect"
+	case stateDead:
+		return "stateDead"
+	default:
+		return "unknown"
+	}
+}
 
 // Node represents a node in the cluster.
 type Node struct {
@@ -112,6 +126,11 @@ func (m *Memberlist) schedule() {
 		m.tickers = append(m.tickers, t)
 	}
 
+	// broadcast queue stats timer
+	z := time.NewTicker(60 * time.Second)
+	go m.triggerFunc(60*time.Second, z.C, stopCh, m.queueStats)
+	m.tickers = append(m.tickers, z)
+
 	// If we made any tickers, then record the stopTick channel for
 	// later.
 	if len(m.tickers) > 0 {
@@ -119,9 +138,41 @@ func (m *Memberlist) schedule() {
 	}
 }
 
+func (m *Memberlist) queueStats() {
+	m.broadcasts.Lock()
+	defer m.broadcasts.Unlock()
+
+	q := m.broadcasts
+	transmitLimit := retransmitLimit(q.RetransmitMult, q.NumNodes())
+	stats := make(map[string]int)
+	sum := 0
+	todo := 0
+
+	for i := len(q.bcQueue) - 1; i >= 0; i-- {
+		b := q.bcQueue[i]
+		msg := b.b.Message()
+		stats[msgTypeToString(messageType(msg[0]))]++
+		sum += b.transmits
+		todo += transmitLimit - b.transmits
+	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":          "queueStats",
+			"direction":    "none",
+			"stats":        stats,
+			"tottransmit":  sum,
+			"todotransmit": todo,
+			"qlen":         len(q.bcQueue),
+			"translimits":  transmitLimit,
+		}).Info("queueStats()")
+
+}
+
 // triggerFunc is used to trigger a function call each time a
 // message is received until a stop tick arrives.
 func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop <-chan struct{}, f func()) {
+
 	// Use a random stagger to avoid syncronizing
 	randStagger := time.Duration(uint64(rand.Int63()) % uint64(stagger))
 	select {
@@ -264,6 +315,19 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	deadline := sent.Add(probeInterval)
 	addr := node.Address()
 	if node.State == stateAlive {
+
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":             "probeNode-stateAlive-ping",
+				"direction":       "send",
+				"probeInterval":   probeInterval,
+				"deadline":        deadline,
+				"seqNo":           ping.SeqNo,
+				"nodeName":        node.Name,
+				"nodeState":       nodeStateToString(node.State),
+				"nodeStateChange": node.StateChange,
+			}).Info("probeNode()")
+
 		if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 			return
@@ -285,6 +349,15 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 
 		compound := makeCompoundMessage(msgs)
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":             "probeNode-suspect",
+				"direction":       "send",
+				"probeInterval":   probeInterval,
+				"nodeName":        node.Name,
+				"nodeState":       nodeStateToString(node.State),
+				"nodeStateChange": node.StateChange,
+			}).Info("probeNode()")
 		if err := m.rawSendMsgPacket(addr, &node.Node, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", addr, err)
 			return
@@ -304,6 +377,15 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// Wait for response or round-trip-time.
 	select {
 	case v := <-ackCh:
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":       "probeNode-udp-ackch",
+				"direction": "rcv",
+				"complete":  v.Complete,
+				"seqNo":     ping.SeqNo,
+				"nodeName":  node.Name,
+				"rtt":       time.Now().Sub(sent).Seconds(),
+			}).Info("probeNode()")
 		if v.Complete == true {
 			if m.config.Ping != nil {
 				rtt := v.Timestamp.Sub(sent)
@@ -318,6 +400,15 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":       "probeNode-udp-first-timeout",
+				"direction": "rcv",
+				"complete":  false,
+				"seqNo":     ping.SeqNo,
+				"nodeName":  node.Name,
+				"rtt":       m.config.ProbeTimeout.Seconds(),
+			}).Info("probeNode()")
 		// Note that we don't scale this timeout based on awareness and
 		// the health score. That's because we don't really expect waiting
 		// longer to help get UDP through. Since health does extend the
@@ -346,6 +437,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			expectedNacks++
 		}
 
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":             "probeNode-indirectPingReq",
+				"direction":       "send",
+				"seqNo":           ping.SeqNo,
+				"nodeName":        node.Name,
+				"nodeState":       nodeStateToString(node.State),
+				"nodeStateChange": node.StateChange,
+			}).Info("probeNode()")
+
 		if err := m.encodeAndSendMsg(peer.Address(), indirectPingMsg, &ind); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s", err)
 		}
@@ -365,6 +466,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
 		go func() {
 			defer close(fallbackCh)
+			dbglog.WithFields(
+				dbglog.Fields{
+					"src":             "probeNode-tcpPing",
+					"direction":       "send",
+					"seqNo":           ping.SeqNo,
+					"deadline":        deadline,
+					"nodeName":        node.Name,
+					"nodeState":       nodeStateToString(node.State),
+					"nodeStateChange": node.StateChange,
+				}).Info("probeNode()")
 			didContact, err := m.sendPingAndWaitForAck(node.Address(), ping, deadline)
 			if err != nil {
 				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
@@ -382,6 +493,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// out first to allow the normal UDP-based acks to come in.
 	select {
 	case v := <-ackCh:
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":             "probeNode-udpPingSecondCheck",
+				"direction":       "rcv",
+				"complete":        v.Complete,
+				"seqNo":           ping.SeqNo,
+				"nodeName":        node.Name,
+				"nodeState":       nodeStateToString(node.State),
+				"nodeStateChange": node.StateChange,
+			}).Info("probeNode()")
 		if v.Complete == true {
 			return
 		}
@@ -395,6 +516,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			m.logger.Printf("[WARN] memberlist: Was able to connect to %s but other probes failed, network may be misconfigured", node.Name)
 			return
 		}
+		// XXX dbglog seems irrelevant here, the error message above tells everything
 	}
 
 	// Update our self-awareness based on the results of this failed probe.
@@ -404,7 +526,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// health because we assume them to be working, and they can help us
 	// decide if the probed node was really dead or if it was something wrong
 	// with ourselves.
-	awarenessDelta = 0
+	awarenessDelta = 0 // wtf this unused variable?
 	if expectedNacks > 0 {
 		if nackCount := len(nackCh); nackCount < expectedNacks {
 			awarenessDelta += (expectedNacks - nackCount)
@@ -417,6 +539,14 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
 	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":             "probeNode-suspecthasfailed",
+			"direction":       "rcv",
+			"nodeName":        node.Name,
+			"nodeState":       nodeStateToString(node.State),
+			"nodeStateChange": node.StateChange,
+		}).Info("probeNode()")
 }
 
 // Ping initiates a ping to the node with the specified name.
@@ -439,10 +569,28 @@ func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	// Wait for response or timeout.
 	select {
 	case v := <-ackCh:
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":       "ping",
+				"direction": "rcv",
+				"node":      node,
+				"addr":      addr,
+				"duration":  time.Now().Sub(sent).Seconds(),
+				"status":    "ok",
+			}).Info("Ping()")
 		if v.Complete == true {
 			return v.Timestamp.Sub(sent), nil
 		}
 	case <-time.After(m.config.ProbeTimeout):
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":       "ping",
+				"direction": "rcv",
+				"node":      node,
+				"addr":      addr,
+				"duration":  time.Now().Sub(sent).Seconds(),
+				"status":    "timeout",
+			}).Info("Ping()")
 		// Timeout, return an error below.
 	}
 
@@ -458,6 +606,14 @@ func (m *Memberlist) resetNodes() {
 
 	// Move dead nodes, but respect gossip to the dead interval
 	deadIdx := moveDeadNodes(m.nodes, m.config.GossipToTheDeadTime)
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "resetNodes",
+			"direction": "local",
+			"nodes":     len(m.nodes),
+			"deadNodes": deadIdx - len(m.nodes),
+		}).Info("resetNodes()")
 
 	// Deregister the dead nodes
 	for i := deadIdx; i < len(m.nodes); i++ {
@@ -506,11 +662,13 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
+	nmsg := 0
 	for _, node := range kNodes {
 		// Get any pending broadcasts
 		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
+		nmsg += len(msgs)
 		if len(msgs) == 0 {
-			return
+			break
 		}
 
 		addr := node.Address()
@@ -526,6 +684,17 @@ func (m *Memberlist) gossip() {
 				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		}
+	}
+
+	if nmsg > 0 {
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":         "gossip",
+				"direction":   "send",
+				"nSentMsgs":   nmsg,
+				"queuesize":   m.broadcasts.NumQueued(),
+				"healthScore": m.GetHealthScore(),
+			}).Info("gossip()")
 	}
 }
 
@@ -552,17 +721,33 @@ func (m *Memberlist) pushPull() {
 	if err := m.pushPullNode(node.Address(), false); err != nil {
 		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
 	}
+
 }
 
 // pushPullNode does a complete state exchange with a specific node.
 func (m *Memberlist) pushPullNode(addr string, join bool) error {
 	defer metrics.MeasureSince([]string{"memberlist", "pushPullNode"}, time.Now())
 
+	start := time.Now()
+
 	// Attempt to send and receive with the node
 	remote, userState, err := m.sendAndReceiveState(addr, join)
 	if err != nil {
 		return err
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":             "pushPullNode",
+			"direction":       "send",
+			"nodeAddr":        addr,
+			"join":            join,
+			"duration":        time.Since(start).Seconds(),
+			"userStateSize":   len(userState),
+			"remoteStateSize": len(remote),
+			"queuesize":       m.broadcasts.NumQueued(),
+			"healthScore":     m.GetHealthScore(),
+		}).Info("pushPullNode()")
 
 	if err := m.mergeRemoteState(join, remote, userState); err != nil {
 		return err
@@ -824,6 +1009,14 @@ func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 		},
 	}
 	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":         "refute",
+			"direction":   "send",
+			"incarnation": inc,
+			"nodeName":    me.Name,
+			"nodeState":   nodeStateToString(me.State),
+		}).Info("refute()")
 }
 
 // aliveNode is invoked by the network layer when we get a message about a
@@ -1008,6 +1201,17 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	if !ok {
 		return
 	}
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":           "suspectNode-enter",
+			"direction":     "send",
+			"nodeTimersLen": len(m.nodeTimers),
+			"node":          s.Node,
+			"from":          s.From,
+			"incarnation":   s.Incarnation,
+			"stateIncarn":   state.Incarnation,
+		}).Info("suspectNode()")
 
 	// Ignore old incarnation numbers
 	if s.Incarnation < state.Incarnation {
