@@ -3,7 +3,7 @@ variables:
 
 stages:
   - ci-image
-  - test
+    #  - test
   - build
   - deploy
 
