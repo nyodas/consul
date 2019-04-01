@@ -14,7 +14,7 @@ ci-image:
   tags: [ "runner:docker", "size:large" ]
   image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/docker:18.03.1
   script:
-    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends zip aws-cli && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
+    - echo 'RUN apt-get update && apt-get install -y --no-install-recommends zip awscli && rm -rf /var/lib/apt/lists/*' >> build-support/docker/Build-Go.dockerfile
     - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE - < build-support/docker/Build-Go.dockerfile
     - docker push 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
 
