@@ -17,15 +17,15 @@ ci-image:
     - docker build --tag 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE - < build-support/docker/Build-Go.dockerfile
     - docker push 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
 
-test:
-  tags: [ "runner:main", "size:2xlarge" ]
-  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
-  stage: test
-  script:
-    - rm -rf /go/src/github.com/hashicorp/consul
-    - cp -a /go/src/github.com/DataDog/consul /go/src/github.com/hashicorp/consul
-    - cd /go/src/github.com/hashicorp/consul
-    - make test-ci
+      #test:
+      #  tags: [ "runner:main", "size:2xlarge" ]
+      #  image: 486234852809.dkr.ecr.us-east-1.amazonaws.com/ci/consul:$CURRENT_CI_IMAGE
+      #  stage: test
+      #  script:
+      #    - rm -rf /go/src/github.com/hashicorp/consul
+      #    - cp -a /go/src/github.com/DataDog/consul /go/src/github.com/hashicorp/consul
+      #    - cd /go/src/github.com/hashicorp/consul
+      #    - make test-ci
 
 release:
   tags: [ "runner:main", "size:2xlarge" ]
