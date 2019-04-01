@@ -54,4 +54,4 @@ deb:
   only:
     - tags # needs to be the format v1.3.1-XXXX (-dd-2 for instance)
   script:
-    - docker run -v /go/src/github.com/DataDog/consul/fpm-recipe:/recipe -w /recipe dpirotte/fpm-cookery:trusty -w /recipe fpm-cook
+    - docker run -v /go/src/github.com/DataDog/consul/fpm-recipe:/recipe -w /recipe dpirotte/fpm-cookery:trusty fpm-cook
