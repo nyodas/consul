@@ -1,7 +1,7 @@
 class Consul < FPM::Cookery::Recipe
   name 'consul'
 
-  version ENV['CI_COMMIT_TAG']
+  version ENV['PACKAGE_VERSION']? ENV['PACKAGE_VERSION'] : ENV['CI_COMMIT_TAG'][/[0-9\-\._].*/]
   revision '1'
   description 'Consul Service Discovery Platform'
 
