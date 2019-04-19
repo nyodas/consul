@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	dbglog "github.com/Sirupsen/logrus"
 	multierror "github.com/hashicorp/go-multierror"
 	sockaddr "github.com/hashicorp/go-sockaddr"
 	"github.com/miekg/dns"
@@ -219,6 +220,14 @@ func Create(conf *Config) (*Memberlist, error) {
 func (m *Memberlist) Join(existing []string) (int, error) {
 	numSuccess := 0
 	var errs error
+
+	dbglog.WithFields(
+		dbglog.Fields{
+			"src":       "Join",
+			"direction": "none",
+			"existing":  len(existing),
+		}).Info("Join()")
+
 	for _, exist := range existing {
 		addrs, err := m.resolveAddr(exist)
 		if err != nil {

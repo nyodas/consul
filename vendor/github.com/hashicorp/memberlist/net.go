@@ -300,7 +300,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 			return
 		}
 
-		if err := m.mergeRemoteState(join, remoteNodes, userState); err != nil {
+		if err := m.mergeRemoteState(join, remoteNodes, userState, conn.RemoteAddr().String()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed push/pull merge: %s %s", err, LogConn(conn))
 			return
 		}
@@ -1095,7 +1095,7 @@ func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (boo
 }
 
 // mergeRemoteState is used to merge the remote state with our local state
-func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, userBuf []byte) error {
+func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, userBuf []byte, addr string) error {
 	// XXX dbglog: verifyProtocol() looks O(n).
 	// We're the sole consumer, so let's monitor it from here
 	if err := m.verifyProtocol(remoteNodes); err != nil {
@@ -1125,7 +1125,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	}
 
 	// Merge the membership state
-	m.mergeState(remoteNodes)
+	m.mergeState(remoteNodes, addr)
 
 	// Invoke the delegate for user state
 	if userBuf != nil && m.config.Delegate != nil {

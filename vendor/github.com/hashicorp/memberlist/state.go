@@ -3,9 +3,12 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net"
+	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -131,10 +134,85 @@ func (m *Memberlist) schedule() {
 	go m.triggerFunc(60*time.Second, z.C, stopCh, m.queueStats)
 	m.tickers = append(m.tickers, z)
 
+	// on demand pushpull
+	go m.syncState()
+
 	// If we made any tickers, then record the stopTick channel for
 	// later.
 	if len(m.tickers) > 0 {
 		m.stopTick = stopCh
+	}
+}
+
+func (m *Memberlist) syncState() {
+	_ = os.Remove("/mnt/state-consul.sock")
+	l, err := net.Listen("unix", "/mnt/state-consul.sock")
+	if err != nil {
+		log.Fatal("listen", err)
+	}
+
+	for {
+		fd, err := l.Accept()
+		if err != nil {
+			log.Fatal("accept", err)
+		}
+
+		buf := make([]byte, 512)
+		nr, err := fd.Read(buf)
+		if err != nil {
+			log.Fatal("read", err)
+		}
+
+		cmd := strings.Split(string(buf[0:nr]), " ")
+		addr := cmd[0]
+
+		remote, _, err := m.sendAndReceiveState(addr, false)
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: sendAndReceiveState with %s failed: %s", addr, err)
+			continue
+		}
+
+		var alives, deads, suspects int
+		for _, r := range remote {
+			switch r.State {
+			case stateAlive:
+				alives++
+			case stateDead:
+				deads++
+			case stateSuspect:
+				suspects++
+			}
+		}
+
+		dbglog.WithFields(
+			dbglog.Fields{
+				"src":       "syncState",
+				"direction": "rcv",
+				"from":      addr,
+				"alives":    alives,
+				"deads":     deads,
+				"suspects":  suspects,
+			}).Info("syncState()")
+
+		if len(cmd) == 2 && cmd[1] == "dump" {
+			var lsuspects, ldeads []string
+			for _, r := range remote {
+				switch r.State {
+				case stateDead:
+					ldeads = append(ldeads, r.Name)
+				case stateSuspect:
+					lsuspects = append(lsuspects, r.Name)
+				}
+			}
+			dbglog.WithFields(
+				dbglog.Fields{
+					"src":       "syncState-dump",
+					"direction": "rcv",
+					"from":      addr,
+					"deads":     ldeads,
+					"suspects":  lsuspects,
+				}).Info("syncState-dump()")
+		}
 	}
 }
 
@@ -652,7 +730,7 @@ func (m *Memberlist) pushPullNode(addr string, join bool) error {
 			"healthScore":     m.GetHealthScore(),
 		}).Info("pushPullNode()")
 
-	if err := m.mergeRemoteState(join, remote, userState); err != nil {
+	if err := m.mergeRemoteState(join, remote, userState, addr); err != nil {
 		return err
 	}
 	return nil
@@ -1253,7 +1331,7 @@ func (m *Memberlist) deadNode(d *dead) {
 
 // mergeState is invoked by the network layer when we get a Push/Pull
 // state transfer
-func (m *Memberlist) mergeState(remote []pushNodeState) {
+func (m *Memberlist) mergeState(remote []pushNodeState, addr string) {
 	var alives, deads, suspects int
 	for _, r := range remote {
 		switch r.State {
@@ -1285,8 +1363,9 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 		dbglog.Fields{
 			"src":       "mergeState",
 			"direction": "rcv",
+			"from":      addr,
 			"alives":    alives,
 			"deads":     deads,
-			"suspects":  suspects,
+			"suspects":  deads - suspects,
 		}).Info("mergeState()")
 }
