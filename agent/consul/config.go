@@ -337,6 +337,15 @@ type Config struct {
 	RPCRate     rate.Limit
 	RPCMaxBurst int
 
+	// SuspicionRateLimit and SuspicionMaxBurst control the suspicion rate
+	// relayed during a mergeState.
+	// When SuspicionRateEnforce is false, the rate limit is not enforced,
+	// but we log when we're over the limit
+	// See https://en.wikipedia.org/wiki/Token_bucket
+	SuspicionRateLimit   rate.Limit
+	SuspicionMaxBurst    int
+	SuspicionRateEnforce bool
+
 	// LeaveDrainTime is used to wait after a server has left the LAN Serf
 	// pool for RPCs to drain and new requests to be sent to other servers.
 	LeaveDrainTime time.Duration
@@ -432,6 +441,10 @@ func DefaultConfig() *Config {
 
 		RPCRate:     rate.Inf,
 		RPCMaxBurst: 1000,
+
+		SuspicionRateLimit:   rate.Inf,
+		SuspicionMaxBurst:    2000,
+		SuspicionRateEnforce: false,
 
 		TLSMinVersion: "tls10",
 

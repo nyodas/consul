@@ -388,5 +388,9 @@ func (c *Client) GetLANCoordinate() (lib.CoordinateSet, error) {
 // relevant configuration information
 func (c *Client) ReloadConfig(config *Config) error {
 	c.rpcLimiter.Store(rate.NewLimiter(config.RPCRate, config.RPCMaxBurst))
+	c.serf.Memberlist().ReloadSuspicionRateLimiter(
+		config.SerfLANConfig.MemberlistConfig.SuspicionRateLimit,
+		config.SerfLANConfig.MemberlistConfig.SuspicionMaxBurst,
+		config.SerfLANConfig.MemberlistConfig.SuspicionRateEnforce)
 	return nil
 }

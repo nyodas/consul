@@ -1095,6 +1095,14 @@ func (s *Server) GetLANCoordinate() (lib.CoordinateSet, error) {
 // ReloadConfig is used to have the Server do an online reload of
 // relevant configuration information
 func (s *Server) ReloadConfig(config *Config) error {
+	s.serfLAN.Memberlist().ReloadSuspicionRateLimiter(
+		config.SerfLANConfig.MemberlistConfig.SuspicionRateLimit,
+		config.SerfLANConfig.MemberlistConfig.SuspicionMaxBurst,
+		config.SerfLANConfig.MemberlistConfig.SuspicionRateEnforce)
+	s.serfWAN.Memberlist().ReloadSuspicionRateLimiter(
+		config.SerfWANConfig.MemberlistConfig.SuspicionRateLimit,
+		config.SerfWANConfig.MemberlistConfig.SuspicionMaxBurst,
+		config.SerfWANConfig.MemberlistConfig.SuspicionRateEnforce)
 	return nil
 }
 

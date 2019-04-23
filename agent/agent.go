@@ -903,6 +903,9 @@ func (a *Agent) consulConfig() (*consul.Config, error) {
 	base.SerfLANConfig.MemberlistConfig.ProbeTimeout = a.config.GossipLANProbeTimeout
 	base.SerfLANConfig.MemberlistConfig.SuspicionMult = a.config.GossipLANSuspicionMult
 	base.SerfLANConfig.MemberlistConfig.RetransmitMult = a.config.GossipLANRetransmitMult
+	base.SerfLANConfig.MemberlistConfig.SuspicionRateLimit = a.config.SuspicionRateLimit
+	base.SerfLANConfig.MemberlistConfig.SuspicionMaxBurst = a.config.SuspicionMaxBurst
+	base.SerfLANConfig.MemberlistConfig.SuspicionRateEnforce = a.config.SuspicionRateEnforce
 	if a.config.ReconnectTimeoutLAN != 0 {
 		base.SerfLANConfig.ReconnectTimeout = a.config.ReconnectTimeoutLAN
 	}
@@ -920,6 +923,9 @@ func (a *Agent) consulConfig() (*consul.Config, error) {
 		base.SerfWANConfig.MemberlistConfig.ProbeTimeout = a.config.GossipWANProbeTimeout
 		base.SerfWANConfig.MemberlistConfig.SuspicionMult = a.config.GossipWANSuspicionMult
 		base.SerfWANConfig.MemberlistConfig.RetransmitMult = a.config.GossipWANRetransmitMult
+		base.SerfWANConfig.MemberlistConfig.SuspicionRateLimit = a.config.SuspicionRateLimit
+		base.SerfWANConfig.MemberlistConfig.SuspicionMaxBurst = a.config.SuspicionMaxBurst
+		base.SerfWANConfig.MemberlistConfig.SuspicionRateEnforce = a.config.SuspicionRateEnforce
 		if a.config.ReconnectTimeoutWAN != 0 {
 			base.SerfWANConfig.ReconnectTimeout = a.config.ReconnectTimeoutWAN
 		}
@@ -3436,6 +3442,12 @@ func (a *Agent) loadLimits(conf *config.RuntimeConfig) {
 	a.config.RPCMaxBurst = conf.RPCMaxBurst
 }
 
+func (a *Agent) loadSuspicionLimits(conf *config.RuntimeConfig) {
+	a.config.SuspicionRateLimit = conf.SuspicionRateLimit
+	a.config.SuspicionMaxBurst = conf.SuspicionMaxBurst
+	a.config.SuspicionRateEnforce = conf.SuspicionRateEnforce
+}
+
 func (a *Agent) ReloadConfig(newCfg *config.RuntimeConfig) error {
 	// Bulk update the services and checks
 	a.PauseSync()
@@ -3480,6 +3492,7 @@ func (a *Agent) ReloadConfig(newCfg *config.RuntimeConfig) error {
 	}
 
 	a.loadLimits(newCfg)
+	a.loadSuspicionLimits(newCfg)
 
 	// create the config for the rpc server/client
 	consulCfg, err := a.consulConfig()
