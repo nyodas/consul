@@ -93,6 +93,11 @@ func DefaultSource() Source {
 			rpc_rate = -1
 			rpc_max_burst = 1000
 		}
+		suspicion_limits = {
+			suspicion_rate = -1
+			suspicion_max_burst = 2000
+			suspicion_rate_enforce = false
+		}
 		performance = {
 			leave_drain_time = "5s"
 			raft_multiplier = ` + strconv.Itoa(int(consul.DefaultRaftMultiplier)) + `

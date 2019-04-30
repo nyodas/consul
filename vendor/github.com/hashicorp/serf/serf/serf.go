@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/coordinate"
+	"golang.org/x/time/rate"
 )
 
 // These are the protocol versions that Serf can _understand_. These are
@@ -1763,4 +1764,8 @@ func (s *Serf) NumNodes() (numNodes int) {
 	s.memberLock.RUnlock()
 
 	return numNodes
+}
+
+func (s *Serf) ReloadSuspicionRateLimiter(limit rate.Limit, burst int, enforced bool) {
+	s.memberlist.ReloadSuspicionRateLimiter(limit, burst, enforced)
 }

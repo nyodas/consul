@@ -1025,6 +1025,12 @@ type RuntimeConfig struct {
 	// hcl: ports { serf_wan = int }
 	SerfPortWAN int
 
+	// Circuit-breaker for suspicion learned during push/pull sync.
+	// hcl: suspicion_limits = { suspicion_rate = (float64|MaxFloat64) suspicion_max_burst = int suspicion_rate_enforce = bool }
+	SuspicionRateLimit   rate.Limit
+	SuspicionMaxBurst    int
+	SuspicionRateEnforce bool
+
 	// GossipLANGossipInterval is the interval between sending messages that need
 	// to be gossiped that haven't been able to piggyback on probing messages.
 	// If this is set to zero, non-piggyback gossip is disabled. By lowering

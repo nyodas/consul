@@ -202,6 +202,7 @@ type Config struct {
 	KeyFile                          *string                  `json:"key_file,omitempty" hcl:"key_file" mapstructure:"key_file"`
 	LeaveOnTerm                      *bool                    `json:"leave_on_terminate,omitempty" hcl:"leave_on_terminate" mapstructure:"leave_on_terminate"`
 	Limits                           Limits                   `json:"limits,omitempty" hcl:"limits" mapstructure:"limits"`
+	SuspicionLimits                  SuspicionLimits          `json:"suspicion_limits,omitempty" hcl:"suspicion_limits" mapstructure:"suspicion_limits"`
 	LogLevel                         *string                  `json:"log_level,omitempty" hcl:"log_level" mapstructure:"log_level"`
 	LogFile                          *string                  `json:"log_file,omitempty" hcl:"log_file" mapstructure:"log_file"`
 	LogRotateDuration                *string                  `json:"log_rotate_duration,omitempty" hcl:"log_rotate_duration" mapstructure:"log_rotate_duration"`
@@ -604,6 +605,12 @@ type UnixSocket struct {
 type Limits struct {
 	RPCMaxBurst *int     `json:"rpc_max_burst,omitempty" hcl:"rpc_max_burst" mapstructure:"rpc_max_burst"`
 	RPCRate     *float64 `json:"rpc_rate,omitempty" hcl:"rpc_rate" mapstructure:"rpc_rate"`
+}
+
+type SuspicionLimits struct {
+	SuspicionMaxBurst    *int     `json:"suspicion_max_burst,omitempty" hcl:"suspicion_max_burst" mapstructure:"suspicion_max_burst"`
+	SuspicionRateLimit   *float64 `json:"suspicion_rate,omitempty" hcl:"suspicion_rate" mapstructure:"suspicion_rate"`
+	SuspicionRateEnforce *bool    `json:"suspicion_rate_enforce,omitempty" hcl:"suspicion_rate_enforce" mapstructure:"suspicion_rate_enforce"`
 }
 
 type Segment struct {
